@@ -44,10 +44,13 @@ extern YYSTYPE cool_yylval;
  */
 
 %}
-
+%x COMMENT
+%x STRING
 /*
  * Define names for regular expressions here.
  */
+
+
 
 DARROW          =>
 ASSIGN		<-
@@ -80,11 +83,26 @@ FALSE		f(?i:alse)
 
 NEWLINE		"\n"
 WHITESPACE	" "|"\f"|"\r"|"\t"|"\v"
-%%
 
- /*
-  *  Nested comments
-  */
+BEGIN_COMMENT 	"(*"
+END_COMMENT 	"*)"
+DASH_COMMENT	--(.)*
+
+
+%%
+	 /*
+	  *  Nested comments
+  	  */
+{END_COMMENT}		{
+				cool_yylval.error_msg = "Unmatched *)";
+				return (ERROR);	
+			}
+{BEGIN_COMMENT}		{ BEGIN(COMMENT); }
+<COMMENT>\n		{ curr_lineno++; }
+<COMMENT>.		{ }
+<COMMENT>{END_COMMENT}	{ BEGIN(INITIAL); }
+{DASH_COMMENT} 		{ curr_lineno++; }
+
 
 	/*
 	* Key words
@@ -150,6 +168,8 @@ WHITESPACE	" "|"\f"|"\r"|"\t"|"\v"
   *  \n \t \b \f, the result is c.
   *
   */
-
+\"		{ BEGIN(STRING); }
+<STRING>.	{ printf("%c",yytext[0]); }
+<STRING>\"	{ BEGIN(INITIAL); }
 
 %%
