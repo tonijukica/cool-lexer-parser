@@ -36,8 +36,10 @@ char *string_buf_ptr;
 
 extern int curr_lineno;
 extern int verbose_flag;
+int comm_num = 0;
 
 extern YYSTYPE cool_yylval;
+
 
 /*
  *  Add Your own definitions here
@@ -45,7 +47,7 @@ extern YYSTYPE cool_yylval;
 
 %}
 %x COMMENT
-%x STRING
+%x STRING string escape
 /*
  * Define names for regular expressions here.
  */
@@ -58,7 +60,7 @@ LE		<=
 INT		[0-9]+
 TYPE		[A-Z][A-Z|a-z|0-9|_]*
 OBJECT		[a-z][A-Z|a-z|0-9|_]*
-SPECIAL		"+"|"-"|"*"|"/"|"~"|"<"|"="|"("|")"|"{"|"}"|"."|","|":"|";"
+SPECIAL		"+"|"-"|"*"|"/"|"~"|"<"|"="|"("|")"|"{"|"}"|"."|","|":"|";"|"@"
 INVALID		"!"|"#"|"$"|"%"|"^"|"&"|"_"|">"|"?"|"`"|"["|"]"|"\\"|"|"
 
 CLASS		(?i:class)
@@ -88,6 +90,7 @@ BEGIN_COMMENT 	"(*"
 END_COMMENT 	"*)"
 DASH_COMMENT	--(.)*
 
+STR		\"
 
 %%
 	 /*
@@ -100,7 +103,9 @@ DASH_COMMENT	--(.)*
 {BEGIN_COMMENT}		{ BEGIN(COMMENT); }
 <COMMENT>\n		{ curr_lineno++; }
 <COMMENT>.		{ }
-<COMMENT>{END_COMMENT}	{ BEGIN(INITIAL); }
+<COMMENT>{END_COMMENT}	{ 
+				BEGIN(INITIAL); 
+			}
 {DASH_COMMENT} 		{ curr_lineno++; }
 
 
@@ -113,6 +118,7 @@ DASH_COMMENT	--(.)*
 {IF}			{ return (IF); }
 {IN}			{ return (IN); }
 {INHERITS}		{ return (INHERITS); }
+{ISVOID}		{ return (ISVOID); }
 {LET}			{ return (LET); }
 {LOOP}			{ return (LOOP); }
 {POOL}			{ return (POOL); }
@@ -168,8 +174,28 @@ DASH_COMMENT	--(.)*
   *  \n \t \b \f, the result is c.
   *
   */
-\"		{ BEGIN(STRING); }
-<STRING>.	{ printf("%c",yytext[0]); }
-<STRING>\"	{ BEGIN(INITIAL); }
+{STR}			{ 
+			
+				BEGIN(STRING);
+				string_buf_ptr = string_buf;
+			}
 
+<STRING>{STR}		{
+				BEGIN(INITIAL);
+				*string_buf_ptr = '\0';
+				cool_yylval.symbol = stringtable.add_string(string_buf);			
+				return (STR_CONST);
+			}
+<STRING>{NEWLINE}	{
+				*string_buf = '\0';
+				BEGIN(INITIAL);
+				cool_yylval.error_msg = "Unterminated string constant";
+				return ERROR;
+			}
+<STRING>\\n  		{ *string_buf_ptr++ = '\n'; }
+<STRING>\\t 		{ *string_buf_ptr++ = '\t'; }
+<STRING>\\r  		{ *string_buf_ptr++ = '\r'; }
+<STRING>\\b  		{ *string_buf_ptr++ = '\b'; }
+<STRING>\\f  		{ *string_buf_ptr++ = '\f'; }
+<STRING>.		{ *string_buf_ptr++ = *yytext; }
 %%
