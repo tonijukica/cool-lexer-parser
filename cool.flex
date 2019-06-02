@@ -36,7 +36,7 @@ char *string_buf_ptr;
 
 extern int curr_lineno;
 extern int verbose_flag;
-int comm_num = 0;
+int commentLvl = 0;
 
 extern YYSTYPE cool_yylval;
 
@@ -44,10 +44,17 @@ extern YYSTYPE cool_yylval;
 /*
  *  Add Your own definitions here
  */
-
+int checkValidStringLenght() {
+	int lenght = string_buf_ptr - string_buf;
+	if(lenght >= MAX_STR_CONST)
+		return 0;
+	else
+		return 1;
+}
 %}
 %x COMMENT
-%x STRING string escape
+%x STRING
+%x RESET
 /*
  * Define names for regular expressions here.
  */
@@ -91,6 +98,7 @@ END_COMMENT 	"*)"
 DASH_COMMENT	--(.)*
 
 STR		\"
+NO_MATCH	.
 
 %%
 	 /*
@@ -100,13 +108,25 @@ STR		\"
 				cool_yylval.error_msg = "Unmatched *)";
 				return (ERROR);	
 			}
-{BEGIN_COMMENT}		{ BEGIN(COMMENT); }
+{BEGIN_COMMENT}		{ 
+				commentLvl++;
+				BEGIN(COMMENT); 
+			}
+<COMMENT><<EOF>>	{
+				BEGIN(INITIAL);
+				cool_yylval.error_msg = "EOF in comment";
+				return (ERROR);
+			}
+<COMMENT>{BEGIN_COMMENT} { commentLvl++; }
 <COMMENT>\n		{ curr_lineno++; }
 <COMMENT>.		{ }
 <COMMENT>{END_COMMENT}	{ 
-				BEGIN(INITIAL); 
+				commentLvl--;
+				if(commentLvl == 0) {
+					BEGIN(INITIAL);
+				}
 			}
-{DASH_COMMENT} 		{ curr_lineno++; }
+{DASH_COMMENT} 		{ }
 
 
 	/*
@@ -154,7 +174,7 @@ STR		\"
 				cool_yylval.symbol = idtable.add_string(yytext);
 				return (OBJECTID);
 			}
-{SPECIAL} 		{ return yytext[0]; }
+{SPECIAL} 		{ return (yytext[0]); }
 {INVALID}		{ 
 				cool_yylval.error_msg = yytext;
 				return (ERROR);
@@ -179,23 +199,49 @@ STR		\"
 				BEGIN(STRING);
 				string_buf_ptr = string_buf;
 			}
+<STRING><<EOF>>		{
+				BEGIN(INITIAL);
+				cool_yylval.error_msg = "EOF in string";
+				return (ERROR);
+			}
 
 <STRING>{STR}		{
-				BEGIN(INITIAL);
-				*string_buf_ptr = '\0';
-				cool_yylval.symbol = stringtable.add_string(string_buf);			
-				return (STR_CONST);
+				if(!checkValidStringLenght()){
+						BEGIN(INITIAL);
+						*string_buf_ptr = '\0';
+						cool_yylval.error_msg = "String constant too long";
+						return (ERROR);
+					}
+				else {
+					BEGIN(INITIAL);
+					*string_buf_ptr = '\0';
+					cool_yylval.symbol = stringtable.add_string(string_buf);			
+					return (STR_CONST);
+				}
+			}
+<STRING>\0		{
+				*string_buf = '\0';
+				BEGIN(RESET);
+				cool_yylval.error_msg = "String contains null character";
+				return (ERROR);
 			}
 <STRING>{NEWLINE}	{
 				*string_buf = '\0';
 				BEGIN(INITIAL);
 				cool_yylval.error_msg = "Unterminated string constant";
-				return ERROR;
+				return (ERROR);
 			}
 <STRING>\\n  		{ *string_buf_ptr++ = '\n'; }
 <STRING>\\t 		{ *string_buf_ptr++ = '\t'; }
-<STRING>\\r  		{ *string_buf_ptr++ = '\r'; }
 <STRING>\\b  		{ *string_buf_ptr++ = '\b'; }
 <STRING>\\f  		{ *string_buf_ptr++ = '\f'; }
+<STRING>\\[^\0\r]	{ *string_buf_ptr++ = yytext[1]; }
 <STRING>.		{ *string_buf_ptr++ = *yytext; }
+
+<RESET>[\n"]		{ BEGIN(INITIAL); }
+<RESET>[^\n"]		{ }
+{NO_MATCH}		{
+				cool_yylval.error_msg = yytext;
+				return (ERROR);		
+			}
 %%
