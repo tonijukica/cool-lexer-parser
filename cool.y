@@ -226,7 +226,7 @@
     | OBJECTID ':' TYPEID ASSIGN expression ',' let { $$ = let($1, $3, $5, $7); } 
     | error let { };
     
-    case: OBJECTID ':' TYPEID DARROW expression ',' { $$ = branch($1, $3, $5); }; 
+    case: OBJECTID ':' TYPEID DARROW expression ';' { $$ = branch($1, $3, $5); }; 
     
     case_list: case { $$ = single_Cases($1); }
     | case_list case  { $$ = append_Cases($1, single_Cases($2)); } ;
