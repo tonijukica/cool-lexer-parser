@@ -237,8 +237,8 @@
     | expression '@' TYPEID '.' OBJECTID '(' expression_list ')' { $$ = static_dispatch($1, $3, $5, $7); }
     | expression '.' OBJECTID '(' ')' { $$ = dispatch($1, $3, nil_Expressions());  }
     | expression '.' OBJECTID '(' expression_list ')' { $$ = dispatch($1, $3, $5); }
-    | OBJECTID '(' ')' {  }
-    | OBJECTID '(' expression_list ')' { }
+    | OBJECTID '(' ')' { $$ = dispatch(object(idtable.add_string("Self")), $1, nil_Expressions()); }
+    | OBJECTID '(' expression_list ')' { $$ = dispatch(object(idtable.add_string("Self")), $1, $3); }
     | '{' expression_list2 '}' { $$ = block($2); }
     | IF expression THEN expression ELSE expression FI { $$ = cond($2, $4, $6); }
     | WHILE expression LOOP expression POOL { $$ = loop($2, $4); }
